@@ -6,7 +6,8 @@ use std::time::Instant;
 use objc2::rc::Retained;
 use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSRunningApplication,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSMenu,
+    NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol};
 
@@ -40,6 +41,13 @@ pub(super) struct AppState {
     start_time: Cell<Option<Instant>>,
     wait_timeout: Cell<Option<Instant>>,
     pending_redraw: RefCell<Vec<WindowId>>,
+    /// The menu shown when the application's icon in the dock is
+    /// right-clicked, if the application supplied one.
+    ///
+    /// `applicationDockMenu:` is a delegate method rather than a setter,
+    /// so an application that does not own the delegate cannot answer it.
+    /// This holds the answer on the application's behalf.
+    dock_menu: RefCell<Option<Retained<NSMenu>>>,
     // NOTE: This is strongly referenced by our `NSWindowDelegate` and our `NSView` subclass, and
     // as such should be careful to not add fields that, in turn, strongly reference those.
 }
@@ -70,6 +78,11 @@ declare_class!(
         fn app_will_terminate(&self, notification: &NSNotification) {
             self.will_terminate(notification)
         }
+
+        #[method_id(applicationDockMenu:)]
+        fn app_dock_menu(&self, _sender: &NSApplication) -> Option<Retained<NSMenu>> {
+            self.ivars().dock_menu.borrow().clone()
+        }
     }
 );
 
@@ -98,8 +111,16 @@ impl ApplicationDelegate {
             start_time: Cell::new(None),
             wait_timeout: Cell::new(None),
             pending_redraw: RefCell::new(vec![]),
+            dock_menu: RefCell::new(None),
         });
         unsafe { msg_send_id![super(this), init] }
+    }
+
+    /// Sets the menu shown when the dock icon is right-clicked.
+    ///
+    /// `None` gives the dock its default menu back.
+    pub(super) fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>) {
+        *self.ivars().dock_menu.borrow_mut() = menu;
     }
 
     // NOTE: This will, globally, only be run once, no matter how many

@@ -84,6 +84,11 @@
 
 use std::os::raw::c_void;
 
+// Re-exported below, so a caller can name the type this takes without
+// having to guess which version of the bindings winit was built against.
+pub use objc2::rc::Retained;
+pub use objc2_app_kit::NSMenu;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -490,6 +495,20 @@ pub trait ActiveEventLoopExtMacOS {
     fn set_allows_automatic_window_tabbing(&self, enabled: bool);
     /// Returns whether the system can automatically organize windows into tabs.
     fn allows_automatic_window_tabbing(&self) -> bool;
+
+    /// Sets the menu shown when the application's dock icon is
+    /// right-clicked, or `None` to give the dock its default menu back.
+    ///
+    /// macOS asks for this menu through `applicationDockMenu:`, a method
+    /// on the *application delegate* rather than a setter on the
+    /// application itself. Winit installs its own delegate, so an
+    /// application built on winit has no way to answer that message; this
+    /// answers it on the application's behalf.
+    ///
+    /// Typed rather than a raw pointer, so that supplying a menu needs no
+    /// `unsafe` at the call site. A menu built by any of the menu
+    /// libraries in this ecosystem can be handed over directly.
+    fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>);
 }
 
 impl ActiveEventLoopExtMacOS for ActiveEventLoop {
@@ -507,6 +526,10 @@ impl ActiveEventLoopExtMacOS for ActiveEventLoop {
 
     fn allows_automatic_window_tabbing(&self) -> bool {
         self.p.allows_automatic_window_tabbing()
+    }
+
+    fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>) {
+        self.p.set_dock_menu(menu);
     }
 }
 

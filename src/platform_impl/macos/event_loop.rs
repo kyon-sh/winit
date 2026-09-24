@@ -17,7 +17,7 @@ use core_foundation::runloop::{
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::ProtocolObject;
 use objc2::sel;
-use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSWindow};
+use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSMenu, NSWindow};
 use objc2_foundation::{MainThreadMarker, NSObjectProtocol};
 
 use super::app::override_send_event;
@@ -163,6 +163,14 @@ impl ActiveEventLoop {
 
     pub(crate) fn allows_automatic_window_tabbing(&self) -> bool {
         NSWindow::allowsAutomaticWindowTabbing(self.mtm)
+    }
+
+    /// Sets the menu the dock shows for this application, or `None` to
+    /// give the dock its default menu back.
+    ///
+    /// Held by the delegate, which is the only thing macOS will ask.
+    pub(crate) fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>) {
+        self.delegate.set_dock_menu(menu)
     }
 }
 
