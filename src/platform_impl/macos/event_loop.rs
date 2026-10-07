@@ -17,8 +17,9 @@ use core_foundation::runloop::{
 use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::ProtocolObject;
 use objc2::sel;
-use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSMenu, NSWindow};
-use objc2_foundation::{MainThreadMarker, NSObjectProtocol};
+use objc2::ClassType;
+use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy, NSImage, NSMenu, NSWindow};
+use objc2_foundation::{MainThreadMarker, NSData, NSObjectProtocol};
 
 use super::app::override_send_event;
 use super::app_state::{ApplicationDelegate, HandlePendingUserEvents};
@@ -171,6 +172,27 @@ impl ActiveEventLoop {
     /// Held by the delegate, which is the only thing macOS will ask.
     pub(crate) fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>) {
         self.delegate.set_dock_menu(menu)
+    }
+
+    /// Sets the application's icon from an image file's bytes, or gives
+    /// the bundle's back with `None`. `false`, and nothing changed, when
+    /// the bytes do not decode.
+    pub(crate) fn set_application_icon(&self, image: Option<&[u8]>) -> bool {
+        let decoded = match image {
+            Some(bytes) => {
+                let data = NSData::with_bytes(bytes);
+                match NSImage::initWithData(NSImage::alloc(), &data) {
+                    Some(image) => Some(image),
+                    None => return false,
+                }
+            },
+            None => None,
+        };
+        let app = NSApplication::sharedApplication(self.mtm);
+        // SAFETY: on the main thread (`self.mtm` proves it), and `None` is
+        // documented to restore the bundle's icon.
+        unsafe { app.setApplicationIconImage(decoded.as_deref()) };
+        true
     }
 }
 

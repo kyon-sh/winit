@@ -509,6 +509,19 @@ pub trait ActiveEventLoopExtMacOS {
     /// `unsafe` at the call site. A menu built by any of the menu
     /// libraries in this ecosystem can be handed over directly.
     fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>);
+
+    /// Sets the application's icon -- in the dock, the application
+    /// switcher and alerts -- from an image file's bytes, in any format
+    /// the system decodes (PNG, TIFF, ICNS ...), or `None` to give back the
+    /// icon the bundle declares. Returns `false`, changing nothing, when the
+    /// bytes are not an image the system can decode.
+    ///
+    /// An application bundle gets its icon from its `Info.plist`; a bare
+    /// executable -- a development build started from a terminal -- has
+    /// none, and the dock shows a generic one. This sets it at run time.
+    /// Bytes rather than an `NSImage`, so the call needs no `unsafe` and no
+    /// AppKit types at the call site.
+    fn set_application_icon(&self, image: Option<&[u8]>) -> bool;
 }
 
 impl ActiveEventLoopExtMacOS for ActiveEventLoop {
@@ -530,6 +543,10 @@ impl ActiveEventLoopExtMacOS for ActiveEventLoop {
 
     fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>) {
         self.p.set_dock_menu(menu);
+    }
+
+    fn set_application_icon(&self, image: Option<&[u8]>) -> bool {
+        self.p.set_application_icon(image)
     }
 }
 
