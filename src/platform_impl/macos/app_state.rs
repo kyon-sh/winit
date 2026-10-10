@@ -48,6 +48,13 @@ pub(super) struct AppState {
     /// so an application that does not own the delegate cannot answer it.
     /// This holds the answer on the application's behalf.
     dock_menu: RefCell<Option<Retained<NSMenu>>>,
+    /// Whether the application's icon in the dock was clicked, or the
+    /// application otherwise asked to reopen, since the application last
+    /// asked -- and if so, whether it had any visible windows then.
+    ///
+    /// `applicationShouldHandleReopen:hasVisibleWindows:` is a delegate
+    /// method, so this records it on the application's behalf.
+    reopen_requested: Cell<Option<bool>>,
     // NOTE: This is strongly referenced by our `NSWindowDelegate` and our `NSView` subclass, and
     // as such should be careful to not add fields that, in turn, strongly reference those.
 }
@@ -83,6 +90,19 @@ declare_class!(
         fn app_dock_menu(&self, _sender: &NSApplication) -> Option<Retained<NSMenu>> {
             self.ivars().dock_menu.borrow().clone()
         }
+
+        #[method(applicationShouldHandleReopen:hasVisibleWindows:)]
+        fn app_should_handle_reopen(&self, _sender: &NSApplication, has_visible: bool) -> bool {
+            self.ivars().reopen_requested.set(Some(has_visible));
+            // Wakes the loop, so the request is seen without waiting for
+            // some other event to arrive first.
+            self.ivars().run_loop.wakeup();
+            // With windows on screen, what AppKit does by itself still
+            // happens. Without, the application decides: AppKit would bring
+            // back a minimised window, where an application usually wants
+            // to open a new one instead -- and doing both is two windows.
+            has_visible
+        }
     }
 );
 
@@ -112,6 +132,7 @@ impl ApplicationDelegate {
             wait_timeout: Cell::new(None),
             pending_redraw: RefCell::new(vec![]),
             dock_menu: RefCell::new(None),
+            reopen_requested: Cell::new(None),
         });
         unsafe { msg_send_id![super(this), init] }
     }
@@ -121,6 +142,12 @@ impl ApplicationDelegate {
     /// `None` gives the dock its default menu back.
     pub(super) fn set_dock_menu(&self, menu: Option<Retained<NSMenu>>) {
         *self.ivars().dock_menu.borrow_mut() = menu;
+    }
+
+    /// Whether a reopen was asked for since the last call, and whether
+    /// there were visible windows then, clearing it.
+    pub(super) fn take_reopen_request(&self) -> Option<bool> {
+        self.ivars().reopen_requested.take()
     }
 
     // NOTE: This will, globally, only be run once, no matter how many

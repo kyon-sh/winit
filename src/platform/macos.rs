@@ -522,6 +522,23 @@ pub trait ActiveEventLoopExtMacOS {
     /// Bytes rather than an `NSImage`, so the call needs no `unsafe` and no
     /// AppKit types at the call site.
     fn set_application_icon(&self, image: Option<&[u8]>) -> bool;
+
+    /// Whether the application was asked to reopen since the last call --
+    /// most often because its icon in the dock was clicked -- clearing the
+    /// request. `Some(true)` when it had visible windows at the time,
+    /// `Some(false)` when it had none.
+    ///
+    /// macOS says so through `applicationShouldHandleReopen:hasVisibleWindows:`,
+    /// a method on the application delegate, which winit owns; an
+    /// application built on winit cannot answer it any other way. This
+    /// matters most when the application has no windows left, where a
+    /// click on its icon is how a person asks for a new one. The event loop
+    /// is woken when it happens, so checking from `about_to_wait` is enough.
+    ///
+    /// With no visible windows, AppKit's own handling -- bringing back a
+    /// minimised window -- is declined, so the application is the one that
+    /// decides what a click means; with windows on screen it runs as usual.
+    fn take_reopen_request(&self) -> Option<bool>;
 }
 
 impl ActiveEventLoopExtMacOS for ActiveEventLoop {
@@ -547,6 +564,10 @@ impl ActiveEventLoopExtMacOS for ActiveEventLoop {
 
     fn set_application_icon(&self, image: Option<&[u8]>) -> bool {
         self.p.set_application_icon(image)
+    }
+
+    fn take_reopen_request(&self) -> Option<bool> {
+        self.p.take_reopen_request()
     }
 }
 

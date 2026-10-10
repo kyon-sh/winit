@@ -174,6 +174,10 @@ impl ActiveEventLoop {
         self.delegate.set_dock_menu(menu)
     }
 
+    pub(crate) fn take_reopen_request(&self) -> Option<bool> {
+        self.delegate.take_reopen_request()
+    }
+
     /// Sets the application's icon from an image file's bytes, or gives
     /// the bundle's back with `None`. `false`, and nothing changed, when
     /// the bytes do not decode.
