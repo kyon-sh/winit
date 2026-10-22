@@ -780,6 +780,18 @@ declare_class!(
             trace_scope!("acceptsFirstMouse:");
             self.ivars().accepts_first_mouse
         }
+
+        // The application decides where a press moves the window. Left to
+        // AppKit, a transparent title bar over full-size content is dragged
+        // from anywhere in it, controls the application draws there
+        // included, and the application never sees the drag; one that wants
+        // a stretch of its bar to move the window says so with
+        // `Window::drag_window`.
+        #[method(mouseDownCanMoveWindow)]
+        fn mouse_down_can_move_window(&self) -> bool {
+            trace_scope!("mouseDownCanMoveWindow");
+            false
+        }
     }
 );
 
