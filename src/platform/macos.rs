@@ -539,6 +539,32 @@ pub trait ActiveEventLoopExtMacOS {
     /// minimised window -- is declined, so the application is the one that
     /// decides what a click means; with windows on screen it runs as usual.
     fn take_reopen_request(&self) -> Option<bool>;
+
+    /// Sets whether a request to quit the application -- from the dock,
+    /// the system's own Quit, logging out or shutting down -- waits for the
+    /// application's answer rather than quitting at once.
+    ///
+    /// macOS asks through `applicationShouldTerminate:`, a method on the
+    /// application delegate, which winit owns. While this is on, it is
+    /// answered with "later": the request is held, the event loop is woken
+    /// and keeps running, and [`take_quit_request`] reports it. The
+    /// application then asks whoever it needs to and says what to do with
+    /// [`reply_to_quit`]. Off by default, where AppKit quits at once.
+    ///
+    /// [`take_quit_request`]: Self::take_quit_request
+    /// [`reply_to_quit`]: Self::reply_to_quit
+    fn set_confirms_quit(&self, confirms: bool);
+
+    /// Whether quitting was asked for since the last call, clearing it.
+    /// Only ever `true` while [`set_confirms_quit`] is on.
+    ///
+    /// [`set_confirms_quit`]: Self::set_confirms_quit
+    fn take_quit_request(&self) -> bool;
+
+    /// Answers a request to quit that is waiting: `true` quits, as AppKit
+    /// would have, and `false` carries on. A logout or shutdown that asked
+    /// goes on or stops with it.
+    fn reply_to_quit(&self, quit: bool);
 }
 
 impl ActiveEventLoopExtMacOS for ActiveEventLoop {
@@ -568,6 +594,18 @@ impl ActiveEventLoopExtMacOS for ActiveEventLoop {
 
     fn take_reopen_request(&self) -> Option<bool> {
         self.p.take_reopen_request()
+    }
+
+    fn set_confirms_quit(&self, confirms: bool) {
+        self.p.set_confirms_quit(confirms)
+    }
+
+    fn take_quit_request(&self) -> bool {
+        self.p.take_quit_request()
+    }
+
+    fn reply_to_quit(&self, quit: bool) {
+        self.p.reply_to_quit(quit)
     }
 }
 

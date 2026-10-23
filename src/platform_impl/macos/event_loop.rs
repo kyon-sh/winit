@@ -178,6 +178,18 @@ impl ActiveEventLoop {
         self.delegate.take_reopen_request()
     }
 
+    pub(crate) fn set_confirms_quit(&self, confirms: bool) {
+        self.delegate.set_confirms_quit(confirms)
+    }
+
+    pub(crate) fn take_quit_request(&self) -> bool {
+        self.delegate.take_quit_request()
+    }
+
+    pub(crate) fn reply_to_quit(&self, quit: bool) {
+        self.delegate.reply_to_quit(quit)
+    }
+
     /// Sets the application's icon from an image file's bytes, or gives
     /// the bundle's back with `None`. `false`, and nothing changed, when
     /// the bytes do not decode.

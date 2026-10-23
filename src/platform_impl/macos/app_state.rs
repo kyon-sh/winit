@@ -6,8 +6,8 @@ use std::time::Instant;
 use objc2::rc::Retained;
 use objc2::{declare_class, msg_send_id, mutability, ClassType, DeclaredClass};
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSMenu,
-    NSRunningApplication,
+    NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate,
+    NSApplicationTerminateReply, NSMenu, NSRunningApplication,
 };
 use objc2_foundation::{MainThreadMarker, NSNotification, NSObject, NSObjectProtocol};
 
@@ -55,6 +55,15 @@ pub(super) struct AppState {
     /// `applicationShouldHandleReopen:hasVisibleWindows:` is a delegate
     /// method, so this records it on the application's behalf.
     reopen_requested: Cell<Option<bool>>,
+    /// Whether the application answers a request to quit itself, rather
+    /// than AppKit quitting at once.
+    ///
+    /// `applicationShouldTerminate:` is a delegate method, so this answers
+    /// it on the application's behalf: with "later", until the application
+    /// replies.
+    confirms_quit: Cell<bool>,
+    /// Whether quitting was asked for and is waiting on the application.
+    quit_requested: Cell<bool>,
     // NOTE: This is strongly referenced by our `NSWindowDelegate` and our `NSView` subclass, and
     // as such should be careful to not add fields that, in turn, strongly reference those.
 }
@@ -89,6 +98,21 @@ declare_class!(
         #[method_id(applicationDockMenu:)]
         fn app_dock_menu(&self, _sender: &NSApplication) -> Option<Retained<NSMenu>> {
             self.ivars().dock_menu.borrow().clone()
+        }
+
+        #[method(applicationShouldTerminate:)]
+        fn app_should_terminate(&self, _sender: &NSApplication) -> NSApplicationTerminateReply {
+            if !self.ivars().confirms_quit.get() {
+                return NSApplicationTerminateReply::NSTerminateNow;
+            }
+            self.ivars().quit_requested.set(true);
+            // Woken, so the request is seen without waiting for some
+            // other event to arrive first.
+            self.ivars().run_loop.wakeup();
+            // Later rather than cancel: a quit asked for by logging out or
+            // shutting down goes on once the application says yes, where a
+            // cancel would stop the logout outright.
+            NSApplicationTerminateReply::NSTerminateLater
         }
 
         #[method(applicationShouldHandleReopen:hasVisibleWindows:)]
@@ -133,6 +157,8 @@ impl ApplicationDelegate {
             pending_redraw: RefCell::new(vec![]),
             dock_menu: RefCell::new(None),
             reopen_requested: Cell::new(None),
+            confirms_quit: Cell::new(false),
+            quit_requested: Cell::new(false),
         });
         unsafe { msg_send_id![super(this), init] }
     }
@@ -148,6 +174,23 @@ impl ApplicationDelegate {
     /// there were visible windows then, clearing it.
     pub(super) fn take_reopen_request(&self) -> Option<bool> {
         self.ivars().reopen_requested.take()
+    }
+
+    /// Whether a request to quit waits on the application's answer.
+    pub(super) fn set_confirms_quit(&self, confirms: bool) {
+        self.ivars().confirms_quit.set(confirms);
+    }
+
+    /// Whether quitting was asked for since the last call, clearing it.
+    pub(super) fn take_quit_request(&self) -> bool {
+        self.ivars().quit_requested.take()
+    }
+
+    /// Answers a request to quit that is waiting: quits when `quit`, and
+    /// carries on otherwise.
+    pub(super) fn reply_to_quit(&self, quit: bool) {
+        let app = NSApplication::sharedApplication(MainThreadMarker::from(self));
+        unsafe { app.replyToApplicationShouldTerminate(quit) };
     }
 
     // NOTE: This will, globally, only be run once, no matter how many
