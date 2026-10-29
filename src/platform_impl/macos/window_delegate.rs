@@ -1273,8 +1273,13 @@ impl WindowDelegate {
         }
 
         if self.window().styleMask().contains(NSWindowStyleMask::Resizable) {
-            // Just use the native zoom if resizable
-            self.window().zoom(None);
+            // Just use the native zoom if resizable. Started once the event
+            // being handled is over: zoomed from inside it, the animation
+            // runs while the handler is in use, every resize it makes is
+            // queued until it ends, and the application cannot draw the
+            // sizes in between - the last frame is stretched instead.
+            let window = self.window().retain();
+            RunLoop::main(mtm).queue_closure(move || window.zoom(None));
         } else {
             // if it's not resizable, we set the frame directly
             let new_rect = if maximized {
